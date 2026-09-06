@@ -1,0 +1,21 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Lingkungan Virtual Python
+venv/
+env/
+.env/
+
+# Database (biarkan kosong saat deploy, kecuali butuh disinkronisasi)
+# database/*.db
+database/produksi_telur.db
+
+# File Besar yang tidak berkaitan dengan kode web
+App.zip
+*.apk
+
+# Folder OS
+.DS_Store
+Thumbs.db

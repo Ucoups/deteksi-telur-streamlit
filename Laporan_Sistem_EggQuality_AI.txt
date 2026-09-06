@@ -1,0 +1,76 @@
+LAPORAN TEKNIS KOMPREHENSIF: MODEL KECERDASAN BUATAN (AI) DETEKSI KUALITAS TELUR
+
+Dokumen ini mendeskripsikan secara mendalam arsitektur, landasan matematis, proses pelatihan, optimasi, dan metode evaluasi dari model Machine Learning yang digunakan dalam sistem deteksi kualitas telur.
+
+====================================================================
+1. LANDASAN ARSITEKTUR MODEL (MODEL ARCHITECTURE)
+
+Sistem ini didayagai oleh algoritma Convolutional Neural Network (CNN) menggunakan framework PyTorch. CNN dipilih karena kemampuannya dalam mengekstraksi fitur hierarkis spasial dari gambar (mulai dari deteksi tepi cangkang hingga tekstur spesifik seperti bercak kotoran atau retakan).
+
+A. PENDEKATAN TRANSFER LEARNING
+Daripada melatih model dari bobot acak (random initialization) yang membutuhkan ribuan dataset dan GPU berkinerja tinggi, sistem ini menggunakan teknik "Transfer Learning" dari model yang telah dilatih (pre-trained) menggunakan dataset ImageNet (1.2 juta gambar, 1000 kelas).
+
+B. ARSITEKTUR YANG DIDUKUNG
+Sistem mengintegrasikan tiga jenis arsitektur tulang punggung (backbone) yang dapat disesuaikan dengan kebutuhan komputasi:
+1) MobileNetV2 (Default): Menggunakan arsitektur "Inverted Residuals and Linear Bottlenecks". Sangat efisien karena menggunakan Depthwise Separable Convolutions, secara drastis mengurangi jumlah parameter matematis tanpa mengorbankan akurasi secara signifikan. Sangat ideal untuk eksekusi berbasis CPU murni.
+2) ResNet-18 (Residual Network): Memecahkan masalah "Vanishing Gradient" pada jaringan saraf yang dalam dengan menggunakan "Skip Connections" atau jalan pintas. Arsitektur ini sangat stabil dan direkomendasikan jika corak perbedaan antara telur segar dan busuk sangat halus/samar.
+3) SqueezeNet: Memanfaatkan "Fire Modules" yang terdiri dari lapisan squeeze (filter 1x1) dan lapisan expand (filter 1x1 dan 3x3). Ini menghasilkan model dengan ukuran file sangat kecil (kurang dari 5MB), sangat cocok untuk sistem dengan keterbatasan memori penyimpanan.
+
+C. MODIFIKASI LAPISAN (FREEZE & REPLACE)
+Pada tingkat kode, sistem membekukan (freezing) seluruh bobot fitur ekstraksi dasar dengan perintah `param.requires_grad = False`. Sistem hanya mengisolasi dan memotong lapisan klasifikasi terakhir (misal: `model.fc` pada ResNet atau `model.classifier[1]` pada MobileNet/SqueezeNet). Lapisan ini kemudian diganti dengan "Fully Connected Layer" baru yang outputnya dipetakan secara eksklusif ke jumlah kelas target dataset kita (Misal: 2 node untuk SEGAR dan BUSUK). Hanya matriks bobot pada lapisan akhir ini yang akan diperbarui selama proses backpropagation.
+
+====================================================================
+2. PRA-PEMROSESAN & AUGMENTASI DATA (DATA PIPELINE)
+
+Input dari kamera atau file tidak bisa langsung dimasukkan ke jaringan saraf. Sistem memiliki tahapan Data Pipeline (menggunakan `torchvision.transforms`) yang ketat:
+
+A. PRA-PEMROSESAN STANDAR (TRAIN & INFERENCE)
+- Resize & Center Crop: Gambar diubah ukurannya ke dimensi 256x256 piksel, lalu dipotong secara presisi di tengah menjadi 224x224 piksel. Dimensi 224x224 adalah standar wajib (input tensor geometry) untuk arsitektur ImageNet pre-trained.
+- Tensor Conversion (`ToTensor`): Mengonversi matriks piksel gambar berformat rentang asli [0, 255] menjadi format Tensor matriks matematis dengan rentang [0.0, 1.0].
+- ImageNet Normalization: Memusatkan dan menstandarkan distribusi warna menggunakan mean (rata-rata) [0.485, 0.456, 0.406] dan standard deviation (simpangan baku) [0.229, 0.224, 0.225] untuk masing-masing saluran warna Red, Green, Blue (RGB). Hal ini mutlak diperlukan agar nilai rentang fitur gambar sejalan dengan cara model awal dilatih.
+
+B. AUGMENTASI DATA (KHUSUS TRAINING)
+Untuk mencegah model menghafal dataset secara statis (Overfitting), sistem menerapkan mutasi gambar acak secara real-time saat training:
+- Random Horizontal & Vertical Flip (Probabilitas 50% membalik sumbu X dan Y gambar telur).
+- Random Rotation (Putaran acak posisi gambar telur antara sudut -15 derajat hingga +15 derajat).
+Kombinasi ini memastikan bahwa meskipun dataset fisik jumlahnya terbatas, variasi matriks matematika yang dilihat oleh model di setiap iterasi Epoch (putaran) akan selalu berbeda, membuat model sangat "Robust" terhadap letak objek yang tidak beraturan.
+
+====================================================================
+3. PROSES PELATIHAN DAN OPTIMASI MATEMATIS
+
+Fase pelatihan dikoordinasikan oleh fungsi generator yang secara efisien memproses memori dalam batch (kelompok) kecil, tidak memuat seluruh gambar ke RAM sekaligus.
+
+- Pembagian Proporsional (Train/Test Split): Menerapkan prinsip pareto 80/20. 80% data didedikasikan untuk pencarian bobot gradien, 20% data disembunyikan secara total dari model untuk validasi objektif di akhir putaran.
+- Adam Optimizer (Adaptive Moment Estimation): Menggantikan Stochastic Gradient Descent (SGD) klasik. Adam menghitung learning rate (kecepatan belajar) yang adaptif untuk setiap parameter individu menggunakan estimasi momen orde pertama dan kedua dari gradien, membuat konvergensi (pencapaian akurasi maksimal) tercapai jauh lebih mulus dan cepat.
+- Fungsi Kerugian (Cross-Entropy Loss): Digunakan karena ini adalah fungsi logaritmik yang sangat menghukum model (memberikan nilai error tinggi) jika model sangat yakin pada tebakan yang ternyata salah. Rumus matematisnya memaksa penyebaran probabilitas kelas mendekati nilai kebenaran murni (Ground Truth).
+- Iterasi Batch & Epoch: Gambar disuplai ke model dalam bentuk ukuran Batch (misal: 4 gambar sekaligus). Satu Epoch terhitung selesai jika model telah memproses dan memperbarui bobotnya terhadap seluruh total gambar dalam dataset latih.
+
+====================================================================
+4. MEKANISME INFERENSI (DETEKSI WAKTU NYATA)
+
+Saat digunakan di halaman deteksi, alur eksekusinya dioptimalkan untuk performa cepat (Low Latency):
+
+- Caching Model In-Memory: Model di-load dari disk (.pth) ke dalam RAM hanya pada pemicuan deteksi pertama (model_cache). Deteksi selanjutnya akan mengeksekusi langsung dari memori tanpa jeda load data ulang.
+- Mode Evaluasi & No-Gradient: Model dikunci secara paksa pada mode evaluasi statis (`model.eval()`) dan komputasi dibungkus dalam blok `torch.no_grad()`. Hal ini mematikan pelacakan gradien (algoritma autograd) sehingga menghemat alokasi memori dan menurunkan beban kerja CPU secara ekstrem (mempercepat prediksi hingga 3x lipat).
+- Penambahan Dimensi Batch: Gambar tunggal dimanipulasi dengan fungsi `unsqueeze(0)` untuk menambahkan dimensi dummy, karena CNN PyTorch selalu mengharapkan format tensor 4-Dimensi [Batch, Channel, Height, Width].
+- Probabilitas Softmax: Skor mentah (Logits) berbentuk garis lurus/linear dari output model dikonversi menggunakan rumusan fungsi aktivasi Softmax ke dalam rentang rasio eksponensial probabilitas dengan nilai 0 hingga 1.0 (0% hingga 100%).
+
+====================================================================
+5. EVALUASI DAN VALIDASI PERFORMA METRIK
+
+Tingkat kepintaran dan reliabilitas algoritma AI dievaluasi secara ketat dan saintifik:
+
+A. ANALISIS KURVA
+- Training vs Validation Loss: Kurva loss merepresentasikan tingkat "kesalahan" komputasi model. Indikator sistem yang cerdas adalah jika garis Training Loss menurun sejalan dengan Validation Loss. Jika Training Loss menukik turun sementara Validation Loss malah melengkung naik, itu menandakan Overfitting (model gagal generalisasi data di dunia nyata).
+- Training vs Validation Accuracy: Merepresentasikan persentase kalkulasi tebakan yang benar dari total uji eksperimen setiap Epoch-nya.
+
+B. MATRIKS KEBINGUNGAN (CONFUSION MATRIX)
+Sebuah tabel pembedahan matriks dua dimensi yang menelanjangi sifat kinerja tebakan akhir dari model:
+- True Positive (TP): Aktual Busuk, Prediksi Busuk. (Kinerja Sempurna).
+- True Negative (TN): Aktual Segar, Prediksi Segar. (Kinerja Sempurna).
+- False Positive (FP / Type I Error): Aktual Segar, Prediksi Busuk. (Kesalahan alarm palsu. Telur bagus tetapi sistem AI menyuruh membuangnya, merugikan peternak secara kerugian fisik/material).
+- False Negative (FN / Type II Error): Aktual Busuk, Prediksi Segar. (Kesalahan paling fatal dan berbahaya. Telur berpenyakit lolos seleksi dan terdistribusi ke piring konsumen).
+
+Rumus Akurasi Final = (TP + TN) / (TP + TN + FP + FN)
+
+Dengan isolasi pemisahan matriks di atas, ilmuwan/admin sistem dapat langsung menganalisis akar spesifik kelemahan letak tebakan dari model AI secara logis dan presisi, dibandingkan sekadar memandang angka total persentase akurasi yang terkadang bias.
