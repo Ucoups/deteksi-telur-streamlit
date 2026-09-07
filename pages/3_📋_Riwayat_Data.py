@@ -37,11 +37,22 @@ else:
     st.write("Unduh data riwayat deteksi dalam format CSV untuk keperluan administrasi atau analisis lebih lanjut.")
     
     csv_data = df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Unduh Laporan Riwayat (CSV)",
-        data=csv_data,
-        file_name=f"riwayat_deteksi_telur_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        st.download_button(
+            label="📥 Unduh Laporan Riwayat (CSV)",
+            data=csv_data,
+            file_name=f"riwayat_deteksi_telur_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+        
+    with col2:
+        if st.session_state.get('role') == 'admin':
+            if st.button("🗑️ Hapus Seluruh Riwayat", type="primary", use_container_width=True):
+                from utils.database import clear_detection_history
+                clear_detection_history()
+                st.success("✅ Seluruh riwayat deteksi telah berhasil dihapus!")
+                st.rerun()
 

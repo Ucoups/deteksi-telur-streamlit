@@ -51,6 +51,14 @@ def save_log(pegawai: str, hasil: str, akurasi: float) -> None:
         )
         conn.commit()
 
+def clear_detection_history() -> None:
+    """Menghapus seluruh data dari tabel riwayat_deteksi."""
+    init_db()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM riwayat_deteksi")
+        conn.commit()
+
 def save_to_dataset(image_bytes: bytes, label: str, split_type: str) -> str:
     """Menyimpan gambar fisik ke folder dan mencatatnya di SQLite."""
     init_db()
