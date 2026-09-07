@@ -48,7 +48,7 @@ with col_input:
             sim_speed = st.slider("Kecepatan Pemrosesan (detik)", min_value=1.0, max_value=5.0, value=2.0, step=0.5)
 
     if img_file and source != "🤖 Simulasi IoT Pabrik":
-        st.image(img_file, caption="Gambar yang akan dianalisis", use_column_width=True)
+        st.image(img_file, caption="Gambar yang akan dianalisis", use_container_width=True)
 
 # ─── Tombol Deteksi ───────────────────────────────────────────────────────────
 if img_file and source != "🤖 Simulasi IoT Pabrik":
@@ -166,14 +166,14 @@ with col_result:
                                 st.image(
                                     overlay_img,
                                     caption="🖼️ Overlay Grad-CAM (Original + Heatmap)",
-                                    use_column_width=True,
+                                    use_container_width=True,
                                     clamp=True
                                 )
                             with gc2:
                                 st.image(
                                     heatmap_img,
                                     caption="🌡️ Peta Panas Murni (Semakin Merah = Lebih Penting)",
-                                    use_column_width=True,
+                                    use_container_width=True,
                                     clamp=True
                                 )
 
@@ -227,7 +227,7 @@ with col_result:
 
                             # Tampilkan gambar
                             img_pil = Image.open(io.BytesIO(img_bytes))
-                            placeholder_img.image(img_pil, caption=f"Scanner Konveyor: {filename}", use_column_width=True)
+                            placeholder_img.image(img_pil, caption=f"Scanner Konveyor: {filename}", use_container_width=True)
 
                             # Jalankan prediksi
                             result, confidence = predict_egg(img_bytes)
