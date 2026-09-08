@@ -92,6 +92,50 @@ def get_dataset_records() -> List[Tuple]:
         data = cursor.fetchall()
     return data
 
+def delete_dataset_by_id(item_id: int) -> bool:
+    """Menghapus data dataset berdasarkan ID, termasuk file fisik."""
+    init_db()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT filename, label FROM dataset_training WHERE id = ?", (item_id,))
+        record = cursor.fetchone()
+        
+        if record:
+            filename, label = record
+            file_path = os.path.join(IMAGE_DIR, label.lower(), filename)
+            
+            # Hapus file fisik jika ada
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception:
+                    pass
+            
+            # Hapus record dari DB
+            cursor.execute("DELETE FROM dataset_training WHERE id = ?", (item_id,))
+            conn.commit()
+            return True
+    return False
+
+def clear_all_dataset() -> None:
+    """Menghapus seluruh rekaman dataset dari DB dan menghapus file fisiknya."""
+    init_db()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT filename, label FROM dataset_training")
+        records = cursor.fetchall()
+        
+        for filename, label in records:
+            file_path = os.path.join(IMAGE_DIR, label.lower(), filename)
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception:
+                    pass
+                    
+        cursor.execute("DELETE FROM dataset_training")
+        conn.commit()
+
 def sync_manual_files() -> Tuple[int, int]:
     """Memindai folder fisik untuk sinkronisasi gambar manual ke DB."""
     init_db()

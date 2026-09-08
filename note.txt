@@ -1,0 +1,17 @@
+git add .
+git commit -m "update fitur hapus riwayat"
+git push
+
+(kalo ada yg eror, jangan panik, pake ini)
+git pull --rebase origin main
+git push
+
+Link: https://deteksi-telurr.streamlit.app/
+
+1. Akun Administrator (Akses Penuh)
+Username: admin
+Password: admin123 (Bisa mengakses semua fitur, termasuk melatih AI dan menghapus riwayat).
+
+2. Akun Operator Pabrik (Akses Terbatas)
+Username: operator
+Password: user123 (Hanya bisa mengakses kamera Deteksi Live dan melihat Dashboard, tapi tidak bisa mengutak-atik AI).

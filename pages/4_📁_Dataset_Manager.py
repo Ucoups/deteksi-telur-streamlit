@@ -76,6 +76,45 @@ else:
     col2.metric("Data Train", len(df[df['Tipe Split'] == 'TRAIN']))
     col3.metric("Data Test", len(df[df['Tipe Split'] == 'TEST']))
     
-    st.dataframe(df, use_container_width=True)
+    st.write("---")
     
-    st.write("💡 *Tip: File gambar fisik tersimpan di folder `database/dataset_images/segar/` dan `busuk/`.*")
+    # === FITUR PAGINATION ===
+    import math
+    ITEMS_PER_PAGE = 50
+    total_pages = math.ceil(len(df) / ITEMS_PER_PAGE)
+    
+    if total_pages > 1:
+        page = st.selectbox("Pilih Halaman", range(1, total_pages + 1), format_func=lambda x: f"Halaman {x} (Baris {(x-1)*ITEMS_PER_PAGE + 1} - {min(x*ITEMS_PER_PAGE, len(df))})")
+    else:
+        page = 1
+        
+    start_idx = (page - 1) * ITEMS_PER_PAGE
+    end_idx = start_idx + ITEMS_PER_PAGE
+    
+    st.dataframe(df.iloc[start_idx:end_idx], use_container_width=True)
+    st.caption(f"💡 Menampilkan {len(df.iloc[start_idx:end_idx])} baris. File fisik tersimpan di `database/dataset_images/segar/` dan `busuk/`.")
+    
+    # === FITUR HAPUS (ZONA BERBAHAYA) ===
+    st.write("---")
+    st.subheader("🗑️ Zona Berbahaya (Hapus Dataset)")
+    
+    del_col1, del_col2 = st.columns(2)
+    with del_col1:
+        with st.expander("Hapus Satu Data (Berdasarkan ID)"):
+            target_id = st.number_input("Masukkan ID tabel yang ingin dihapus:", min_value=0, step=1)
+            if st.button("Hapus Data Ini", type="primary", use_container_width=True):
+                from utils.database import delete_dataset_by_id
+                if delete_dataset_by_id(target_id):
+                    st.success(f"Data dengan ID {target_id} berhasil dihapus!")
+                    st.rerun()
+                else:
+                    st.error("Gagal menghapus. ID tersebut tidak ditemukan di database.")
+                    
+    with del_col2:
+        with st.expander("Hapus Seluruh Dataset (Sapu Bersih)"):
+            st.warning("Peringatan: Tindakan ini tidak bisa dibatalkan! Semua file fisik akan musnah.")
+            if st.button("Hapus Seluruh Dataset", type="primary", use_container_width=True):
+                from utils.database import clear_all_dataset
+                clear_all_dataset()
+                st.success("Seluruh dataset berhasil dikosongkan secara permanen!")
+                st.rerun()
