@@ -262,3 +262,66 @@ def train_model_stream(data_dir: str, model_name: str = "mobilenetv2", epochs: i
         "metrics": eval_metrics
     }
 
+
+def train_quick_epoch(img_bytes: bytes, label: str) -> tuple[bool, str]:
+    """
+    Melakukan 'Active Learning' cepat (1 epoch, 1 image) untuk memperbarui bobot model.
+    """
+    import io
+    from PIL import Image
+
+    if not os.path.exists(MODEL_PATH):
+        return False, "Model belum pernah dilatih sama sekali. Harap latih model utama (Full Train) terlebih dahulu!"
+
+    device = get_device()
+    checkpoint = torch.load(MODEL_PATH, map_location=device)
+    class_names = checkpoint['class_names']
+    model_name = checkpoint.get('model_name', 'mobilenetv2')
+
+    label_upper = label.upper()
+    if label_upper not in class_names:
+        return False, f"Label '{label}' tidak ada di daftar class model: {class_names}. Latih ulang model penuh terlebih dahulu."
+
+    class_idx = class_names.index(label_upper)
+
+    model = build_model(model_name=model_name, num_classes=len(class_names))
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model = model.to(device)
+
+    # Transform
+    transform = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+
+    try:
+        img = Image.open(io.BytesIO(img_bytes)).convert('RGB')
+        input_tensor = transform(img).unsqueeze(0).to(device)
+        target_tensor = torch.tensor([class_idx], dtype=torch.long).to(device)
+
+        model.train()
+        criterion = nn.CrossEntropyLoss()
+        # LR sangat kecil agar tidak merusak bobot yang sudah ada
+        optimizer = optim.SGD(model.parameters(), lr=0.0005, momentum=0.9)
+
+        optimizer.zero_grad()
+        outputs = model(input_tensor)
+        loss = criterion(outputs, target_tensor)
+        loss.backward()
+        optimizer.step()
+
+        # Simpan kembali
+        checkpoint['model_state_dict'] = model.state_dict()
+        torch.save(checkpoint, MODEL_PATH)
+
+        # Hapus cache model lama di ml_inference agar model baru dimuat
+        import utils.ml_inference as mlinf
+        mlinf.model_cache = None
+
+        return True, "Model berhasil menyerap gambar ini! Bobot telah diperbarui."
+    except Exception as e:
+        return False, f"Terjadi kesalahan saat melatih: {str(e)}"
+
+
