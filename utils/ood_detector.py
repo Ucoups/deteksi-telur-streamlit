@@ -31,8 +31,9 @@ MSP_THRESHOLD = 0.51
 # Suhu (Temperature) untuk meratakan logits
 TEMPERATURE = 1.0
 # Jika Free Energy di atas nilai ini → tolak (karena energi terlalu tinggi / tidak stabil)
-# Nilai ini bisa disesuaikan. Gambar in-distribution biasanya bernilai negatif besar (misal -3.0 s/d -6.0)
-ENERGY_THRESHOLD = -0.5
+# Diubah menjadi -3.0 (lebih ketat) karena benda seperti mie ayam/nasi goreng 
+# ternyata bisa menipu fitur warna dan menghasilkan energi sekitar -2.3
+ENERGY_THRESHOLD = -3.0
 
 
 def _compute_free_energy(logits: torch.Tensor, temperature: float = 1.0) -> float:
