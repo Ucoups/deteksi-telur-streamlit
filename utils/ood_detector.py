@@ -25,48 +25,48 @@ import math
 
 # --- Threshold konfigurasi (dapat di-tune) ---
 # Jika confidence di bawah nilai ini → tolak sebagai "Bukan Telur"
-# (Diubah menjadi 51% karena deteksi telur dalam gelap/candling sering menghasilkan confidence mendekati 50%)
 MSP_THRESHOLD = 0.51
 
-# Jika entropy terlalu tinggi → AI tidak yakin → tolak
-# Max entropy untuk 2 class = log(2) ≈ 0.693
-ENTROPY_THRESHOLD = 0.6929
+# Konfigurasi Energy-Based OOD (Liu et al., NeurIPS 2020)
+# Suhu (Temperature) untuk meratakan logits
+TEMPERATURE = 1.0
+# Jika Free Energy di atas nilai ini → tolak (karena energi terlalu tinggi / tidak stabil)
+# Nilai ini bisa disesuaikan. Gambar in-distribution biasanya bernilai negatif besar (misal -3.0 s/d -6.0)
+ENERGY_THRESHOLD = -0.5
 
 
-def _compute_entropy(probabilities: torch.Tensor) -> float:
+def _compute_free_energy(logits: torch.Tensor, temperature: float = 1.0) -> float:
     """
-    Menghitung Shannon Entropy dari vektor probabilitas.
-    Entropy tinggi = AI tidak yakin / distribusi merata.
+    Menghitung Helmholtz Free Energy dari vektor logits.
+    Energi tinggi (mendekati 0 atau positif) = Out-of-Distribution.
+    Energi rendah (negatif besar) = In-Distribution.
     
-    H = -sum(p * log(p))
+    E(x) = -T * logsumexp(logits / T)
     """
-    probs = probabilities.cpu().numpy()
-    # Tambahkan epsilon untuk menghindari log(0)
-    probs = np.clip(probs, 1e-10, 1.0)
-    entropy = -np.sum(probs * np.log(probs))
-    return float(entropy)
+    energy = -temperature * torch.logsumexp(logits / temperature, dim=0)
+    return float(energy.item())
 
 
 def detect_ood(
     image_bytes: bytes,
     model: nn.Module,
     msp_threshold: float = MSP_THRESHOLD,
-    entropy_threshold: float = ENTROPY_THRESHOLD
+    energy_threshold: float = ENERGY_THRESHOLD
 ) -> Tuple[bool, str, dict]:
     """
-    Melakukan 3 lapis pemeriksaan OOD pada gambar yang diunggah.
+    Melakukan 2 lapis pemeriksaan OOD tingkat lanjut pada gambar.
 
     Args:
         image_bytes: Bytes gambar dari Streamlit uploader
         model: Model PyTorch yang sudah dilatih
-        msp_threshold: Batas minimum confidence. Di bawah ini = OOD
-        entropy_threshold: Batas maximum entropy. Di atas ini = OOD
+        msp_threshold: Batas minimum confidence.
+        energy_threshold: Batas maksimum Free Energy. Di atas ini = OOD.
 
     Returns:
         Tuple:
-            - is_ood (bool): True jika gambar bukan telur (Out-of-Distribution)
-            - reason (str): Penjelasan mengapa gambar ditolak/diterima
-            - metrics (dict): Detail metrik untuk ditampilkan ke juri
+            - is_ood (bool): True jika gambar bukan telur
+            - reason (str): Penjelasan
+            - metrics (dict): Detail metrik
     """
     transform = transforms.Compose([
         transforms.Resize(256),
@@ -80,20 +80,20 @@ def detect_ood(
 
     model.eval()
     with torch.no_grad():
-        output = model(input_tensor)
-        probabilities = torch.nn.functional.softmax(output[0], dim=0)
+        logits = model(input_tensor)[0]
+        probabilities = torch.nn.functional.softmax(logits, dim=0)
 
     max_prob = probabilities.max().item()
-    entropy = _compute_entropy(probabilities)
+    free_energy = _compute_free_energy(logits, TEMPERATURE)
 
-    # Susun detail metrik (berguna untuk ditampilkan di UI)
+    # Susun detail metrik untuk UI
     metrics = {
         "max_confidence": round(max_prob * 100, 2),
-        "entropy": round(entropy, 4),
-        "entropy_max_possible": round(math.log(len(probabilities)), 4),
+        "free_energy": round(free_energy, 4),
         "threshold_msp": round(msp_threshold * 100, 2),
-        "threshold_entropy": entropy_threshold,
-        "prob_per_class": {f"class_{i}": round(p.item() * 100, 2) for i, p in enumerate(probabilities)}
+        "threshold_energy": energy_threshold,
+        "prob_per_class": {f"class_{i}": round(p.item() * 100, 2) for i, p in enumerate(probabilities)},
+        "logits_raw": {f"class_{i}": round(l.item(), 4) for i, l in enumerate(logits)}
     }
 
     # === LAYER 1: Maximum Softmax Probability (MSP) Check ===
@@ -103,12 +103,12 @@ def detect_ood(
             "AI tidak mengenali objek ini sebagai telur."
         ), metrics
 
-    # === LAYER 2: Entropy Check ===
-    if entropy > entropy_threshold:
+    # === LAYER 2: Free Energy Check (NeurIPS 2020) ===
+    if free_energy > energy_threshold:
         return True, (
-            f"Distribusi probabilitas terlalu merata (Entropy: {entropy:.4f} > {entropy_threshold}). "
-            "AI sangat ragu-ragu, kemungkinan besar ini bukan telur."
+            f"Energi gambar terlalu tinggi / kacau (Energy: {free_energy:.4f} > {energy_threshold}). "
+            "Objek terdeteksi sebagai anomali (Out-of-Distribution)."
         ), metrics
 
     # Lolos semua pemeriksaan → Gambar dikenali sebagai telur
-    return False, "✅ Gambar dikenali sebagai telur ayam.", metrics
+    return False, "✅ Gambar memiliki energi stabil. Dikenali sebagai telur ayam.", metrics

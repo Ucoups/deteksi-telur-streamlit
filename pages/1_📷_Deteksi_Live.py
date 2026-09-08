@@ -101,14 +101,14 @@ with col_result:
                             delta_color="inverse"
                         )
                         c2.metric(
-                            "Entropy (Ketidakpastian)",
-                            f"{ood_metrics['entropy']}",
-                            f"Threshold: ≤ {ood_metrics['threshold_entropy']}",
+                            "Free Energy (Stabilitas)",
+                            f"{ood_metrics['free_energy']}",
+                            f"Threshold: ≤ {ood_metrics['threshold_energy']}",
                             delta_color="inverse"
                         )
                         st.caption(
-                            "**Interpretasi Entropy:** Semakin mendekati 0 = AI sangat yakin. "
-                            f"Nilai maksimum (2 class) = {ood_metrics['entropy_max_possible']:.4f}"
+                            "**Interpretasi Free Energy:** Nilai negatif besar = Dikenali kuat. "
+                            "Mendekati 0 atau positif = Asing / Out-of-Distribution."
                         )
 
                 else:
@@ -130,7 +130,7 @@ with col_result:
                         with st.expander("📊 Detail Pemeriksaan OOD (Lolos)"):
                             c1, c2 = st.columns(2)
                             c1.metric("Confidence AI", f"{ood_metrics['max_confidence']}%", "✅ Lolos MSP")
-                            c2.metric("Entropy", f"{ood_metrics['entropy']}", "✅ Lolos Entropy Check")
+                            c2.metric("Free Energy", f"{ood_metrics['free_energy']}", "✅ Lolos Energy Check")
 
                     # Simpan log dengan operator aktif
                     from utils.database import save_log
