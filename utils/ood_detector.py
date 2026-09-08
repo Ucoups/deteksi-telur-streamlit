@@ -31,9 +31,8 @@ MSP_THRESHOLD = 0.51
 # Suhu (Temperature) untuk meratakan logits
 TEMPERATURE = 1.0
 # Jika Free Energy di atas nilai ini → tolak (karena energi terlalu tinggi / tidak stabil)
-# Diubah menjadi -3.0 (lebih ketat) karena benda seperti mie ayam/nasi goreng 
-# ternyata bisa menipu fitur warna dan menghasilkan energi sekitar -2.3
-ENERGY_THRESHOLD = -3.0
+# Diubah kembali ke -1.0 agar telur yang sangat gelap (energi -1.45) tetap bisa lolos.
+ENERGY_THRESHOLD = -1.0
 
 
 def _compute_free_energy(logits: torch.Tensor, temperature: float = 1.0) -> float:
