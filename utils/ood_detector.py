@@ -30,7 +30,7 @@ MSP_THRESHOLD = 0.51
 
 # Jika entropy terlalu tinggi → AI tidak yakin → tolak
 # Max entropy untuk 2 class = log(2) ≈ 0.693
-ENTROPY_THRESHOLD = 0.69
+ENTROPY_THRESHOLD = 0.6929
 
 
 def _compute_entropy(probabilities: torch.Tensor) -> float:
